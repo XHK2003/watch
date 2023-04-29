@@ -111,9 +111,9 @@ int updateweater_time = 10;
 //----------------------------------------------------
 
 //LCD屏幕相关设置
-TFT_eSPI tft = TFT_eSPI();  // 引脚请自行配置tft_espi库中的 User_Setup.h文件
+TFT_eSPI tft = TFT_eSPI(D3);  // 引脚请自行配置tft_espi库中的 User_Setup.h文件
 TFT_eSprite clk = TFT_eSprite(&tft);
-#define LCD_BL_PIN 5    //LCD背光引脚
+#define LCD_BL_PIN 5    //LCD背光引脚 
 uint16_t bgColor = 0x0000;
 
 //其余状态标志位
