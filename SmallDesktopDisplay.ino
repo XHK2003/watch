@@ -919,7 +919,7 @@ void getCityCode(){
   httpClient.addHeader("Referer", "http://www.weather.com.cn/");
  
   //启动连接并发送HTTP请求
-  int httpCode = httpClient.GET(URL);
+  int httpCode = httpClient.GET(URL.c_str());
   Serial.print("Send GET request to URL: ");
   Serial.println(URL);
   
