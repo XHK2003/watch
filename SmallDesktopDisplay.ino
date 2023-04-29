@@ -1,4 +1,21 @@
-
+#include <ArduinoWiFiServer.h>
+#include <BearSSLHelpers.h>
+#include <CertStoreBearSSL.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266WiFiAP.h>
+#include <ESP8266WiFiGeneric.h>
+#include <ESP8266WiFiGratuitous.h>
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266WiFiSTA.h>
+#include <ESP8266WiFiScan.h>
+#include <ESP8266WiFiType.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
+#include <WiFiClientSecureBearSSL.h>
+#include <WiFiServer.h>
+#include <WiFiServerSecure.h>
+#include <WiFiServerSecureBearSSL.h>
+#include <WiFiUdp.h>
 #include "ArduinoJson.h"
 #include <TimeLib.h>
 #include <ESP8266WiFi.h>
@@ -12,9 +29,12 @@
 #include "qr.h"
 #include "number.h"
 #include "weathernum.h"
+#include <Button2.h>  //按钮库
+#include <WiFiClient.h>
 
 
-#define Version  "SDD V1.3.4"
+
+#define Version  "SDD V1.4.2"
 /* *****************************************************************
  *  配置使能位
  * *****************************************************************/
@@ -24,7 +44,6 @@
 #define DHT_EN  0
 //设置太空人图片是否使用
 #define imgAst_EN 1
-
 
 
 #if WM_EN
@@ -41,7 +60,8 @@ WiFiManager wm; // global wm instance
 DHT dht(DHTPIN,DHTTYPE);
 #endif
 
-
+//定义按钮引脚
+Button2 Button_sw1 = Button2(4); 
 
 
 
@@ -83,7 +103,7 @@ struct config_type
 
 //---------------修改此处""内的信息--------------------
 //如开启WEB配网则可不用设置这里的参数，前一个为wifi ssid，后一个为密码
-config_type wificonf ={{""},{""}};
+config_type wificonf ={{"xiaomi777"},{"88888888"}};
 
 //天气更新时间  X 分钟
 int updateweater_time = 10;
@@ -114,7 +134,7 @@ Number      dig;
 WeatherNum  wrat;
 
 uint32_t targetTime = 0;   
-String cityCode = "101250101";  //天气城市代码 长沙:101250101株洲:101250301衡阳:101250401
+String cityCode = "0";  //天气城市代码 长沙:101250101株洲:101250301衡阳:101250401
 int tempnum = 0;   //温度百分比
 int huminum = 0;   //湿度百分比
 int tempcol =0xffff;   //温度显示颜色
@@ -544,18 +564,18 @@ void Webconfig()
   // const char* custom_radio_str = "<br/><label for='customfieldid'>Custom Field Label</label><input type='radio' name='customfieldid' value='1' checked> One<br><input type='radio' name='customfieldid' value='2'> Two<br><input type='radio' name='customfieldid' value='3'> Three";
   // new (&custom_field) WiFiManagerParameter(custom_radio_str); // custom html input
 
-  const char* set_rotation = "<br/><label for='set_rotation'>Set Rotation</label>\
-                              <input type='radio' name='set_rotation' value='0' checked> One<br>\
-                              <input type='radio' name='set_rotation' value='1'> Two<br>\
-                              <input type='radio' name='set_rotation' value='2'> Three<br>\
-                              <input type='radio' name='set_rotation' value='3'> Four<br>";
+  const char* set_rotation = "<br/><label for='set_rotation'>显示方向设置</label>\
+                              <input type='radio' name='set_rotation' value='0' checked> USB接口朝下<br>\
+                              <input type='radio' name='set_rotation' value='1'> USB接口朝右<br>\
+                              <input type='radio' name='set_rotation' value='2'> USB接口朝上<br>\
+                              <input type='radio' name='set_rotation' value='3'> USB接口朝左<br>";
   WiFiManagerParameter  custom_rot(set_rotation); // custom html input
-  WiFiManagerParameter  custom_bl("LCDBL","LCD BackLight(1-100)","10",3);
+  WiFiManagerParameter  custom_bl("LCDBL","屏幕亮度（1-100）","10",3);
   #if DHT_EN
   WiFiManagerParameter  custom_DHT11_en("DHT11_en","Enable DHT11 sensor","0",1);
   #endif
-  WiFiManagerParameter  custom_weatertime("WeaterUpdateTime","Weather Update Time(Min)","10",3);
-  WiFiManagerParameter  custom_cc("CityCode","CityCode","101250101",9);
+  WiFiManagerParameter  custom_weatertime("WeaterUpdateTime","天气刷新时间（分钟）","10",3);
+  WiFiManagerParameter  custom_cc("CityCode","城市代码","0",9);
   WiFiManagerParameter  p_lineBreak_notext("<p></p>");
 
   // wm.addParameter(&p_lineBreak_notext);
@@ -705,6 +725,8 @@ void saveParamCallback(){
 
 void setup()
 {
+  Button_sw1.setClickHandler(esp_reset);
+  Button_sw1.setLongClickHandler(wifi_reset);
   Serial.begin(115200);
   EEPROM.begin(1024);
   // WiFi.forceSleepWake();
@@ -824,6 +846,7 @@ void loop()
 {
   LCD_reflash(0);
   Serial_set();
+  Button_sw1.loop(); //按钮轮询
 }
 
 void LCD_reflash(int en)
@@ -873,21 +896,20 @@ void LCD_reflash(int en)
 
 // 发送HTTP请求并且将服务器响应通过串口输出
 void getCityCode(){
- String URL = "http://wgeo.weather.com.cn/ip/?_="+String(millis()).c_str();
-
+ String URL = "http://wgeo.weather.com.cn/ip/?_=";
   //创建 HTTPClient 对象
   WiFiClient wifiClient;
   HTTPClient httpClient;
  
   //配置请求地址。此处也可以不使用端口号和PATH而单纯的
-  httpClient.begin(wifiClient, URL); 
+  httpClient.begin(wifiClient,URL); 
   
   //设置请求头中的User-Agent
   httpClient.setUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1");
   httpClient.addHeader("Referer", "http://www.weather.com.cn/");
  
   //启动连接并发送HTTP请求
-  int httpCode = httpClient.GET(URL.c_str());
+  int httpCode = httpClient.GET();
   Serial.print("Send GET request to URL: ");
   Serial.println(URL);
   
@@ -922,12 +944,13 @@ void getCityCode(){
 
 // 获取城市天气
 void getCityWeater(){
- //String URL = "http://d1.weather.com.cn/dingzhi/" + cityCode + ".html?_="+String(now());//新
- String URL = "http://d1.weather.com.cn/weather_index/" + cityCode + ".html?_="+String(now());//原来
+ String URL = "http://d1.weather.com.cn/dingzhi/" + cityCode + ".html?_="+String(now());//新
+ //String URL = "http://d1.weather.com.cn/weather_index/" + cityCode + ".html?_="+String(now());//原来
   //创建 HTTPClient 对象
-  HTTPClient httpClient;
-  
-  httpClient.begin(URL); 
+ WiFiClient client;
+HTTPClient httpClient;
+
+httpClient.begin(client, URL); 
   
   //设置请求头中的User-Agent
   httpClient.setUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1");
@@ -1316,4 +1339,14 @@ void sendNTPpacket(IPAddress &address)
   Udp.beginPacket(address, 123); //NTP requests are to port 123
   Udp.write(packetBuffer, NTP_PACKET_SIZE);
   Udp.endPacket();
+}
+void esp_reset(Button2& btn){
+ ESP.reset();
+}
+void wifi_reset(Button2& btn){
+  wm.resetSettings();
+  deletewificonfig();
+  delay(10);
+  Serial.println("重置WiFi成功");
+  ESP.restart();
 }
